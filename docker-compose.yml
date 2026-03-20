@@ -1,0 +1,16 @@
+services:
+  swegon-mcp:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+    environment:
+      # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+      SWEGON_API_KEY: "${SWEGON_API_KEY}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

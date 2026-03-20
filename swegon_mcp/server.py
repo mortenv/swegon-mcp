@@ -230,20 +230,38 @@ def main():
     import sys
 
     config_path = "config.yaml"
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
+    mode = "stdio"
+    host = "0.0.0.0"
+    port = 8000
+
+    args = sys.argv[1:]
+    if "--http" in args:
+        mode = "http"
+        args.remove("--http")
+    if args:
+        config_path = args[0]
 
     global _client, _config
     _config = load_config(config_path)
     _client = SwegonModbusClient(_config)
 
     logger.info(
-        f"Starting swegon-mcp | SuperWISE: {_config.modbus.host}:{_config.modbus.port} | "
+        f"Starting swegon-mcp [{mode}] | "
+        f"SuperWISE: {_config.modbus.host}:{_config.modbus.port} | "
         f"Rooms: {[r.name for r in _config.registers.temperature_setpoints]} | "
         f"Fan units: {[f.name for f in _config.registers.fan_modes]}"
     )
 
-    asyncio.run(mcp.server.stdio.stdio_server(app))
+    if mode == "http":
+        import uvicorn
+        from .http_server import create_app, get_api_key
+
+        api_key = get_api_key()
+        http_app = create_app(api_key)
+        logger.info(f"HTTP/SSE server listening on {host}:{port}")
+        uvicorn.run(http_app, host=host, port=port)
+    else:
+        asyncio.run(mcp.server.stdio.stdio_server(app))
 
 
 if __name__ == "__main__":
