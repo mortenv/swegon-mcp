@@ -1,0 +1,58 @@
+# swegon-mcp configuration
+# Copy to config.yaml and adjust to your setup
+
+modbus:
+  host: "192.168.1.100"   # IP address of your SuperWISE unit
+  port: 502               # Modbus TCP port (default: 502)
+  unit_id: 1              # Modbus unit/slave ID
+  timeout: 5              # Connection timeout in seconds
+
+# Define which registers are accessible (whitelist)
+# Find register addresses in your Modbus export from SuperWISE
+registers:
+  temperature_setpoints:
+    - name: "living_room"
+      label: "Living Room"
+      address: 1001         # Holding register address
+      min: 16
+      max: 28
+      scale: 1.0            # Multiply raw value (e.g. 0.1 if unit sends tenths)
+      unit: "°C"
+
+    - name: "bedroom"
+      label: "Bedroom"
+      address: 1002
+      min: 16
+      max: 26
+      scale: 1.0
+      unit: "°C"
+
+  fan_modes:
+    - name: "main"
+      label: "Main AHU"
+      address: 2001         # Coil or holding register
+      type: "holding"       # "coil" or "holding"
+      values:
+        normal: 0
+        high: 2
+        away: 1
+
+  status_reads:
+    - name: "supply_temp"
+      label: "Supply Air Temperature"
+      address: 3001
+      type: "input"         # Read-only input register
+      scale: 0.1
+      unit: "°C"
+
+    - name: "extract_temp"
+      label: "Extract Air Temperature"
+      address: 3002
+      type: "input"
+      scale: 0.1
+      unit: "°C"
+
+# Boost settings
+boost:
+  default_duration_minutes: 30
+  max_duration_minutes: 120
