@@ -1,7 +1,6 @@
 """MCP server exposing Swegon WISE ventilation control tools."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -34,6 +33,8 @@ async def list_tools() -> list[types.Tool]:
     fan_modes_example = []
     if cfg.registers.fan_modes:
         fan_modes_example = list(cfg.registers.fan_modes[0].values.keys())
+
+    boost_units = [b.name for b in cfg.registers.air_boosts]
 
     tools = [
         types.Tool(
@@ -97,24 +98,17 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="boost_fan",
             description=(
-                f"Temporarily boost ventilation to high mode for a set duration, "
-                f"then revert to normal. Max duration: {cfg.boost.max_duration_minutes} minutes."
+                "Trigger SuperWISE 'Air boost' (Manuell forsering) for a ventilation unit. "
+                "SuperWISE manages boost duration and auto-revert — no timer needed. "
+                f"Available units: {boost_units}"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "unit": {
                         "type": "string",
-                        "description": f"Fan unit name. One of: {fan_units}",
-                        "enum": fan_units if fan_units else ["main"],
-                    },
-                    "minutes": {
-                        "type": "integer",
-                        "description": (
-                            f"Duration in minutes "
-                            f"(default: {cfg.boost.default_duration_minutes}, "
-                            f"max: {cfg.boost.max_duration_minutes})"
-                        ),
+                        "description": f"Boost unit name. One of: {boost_units}",
+                        "enum": boost_units if boost_units else ["main"],
                     },
                 },
                 "required": ["unit"],
@@ -178,32 +172,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
         elif name == "boost_fan":
             unit_name = arguments["unit"]
-            minutes = int(arguments.get("minutes", cfg.boost.default_duration_minutes))
-            minutes = min(minutes, cfg.boost.max_duration_minutes)
-
             reg = next(
-                (r for r in cfg.registers.fan_modes if r.name == unit_name), None
+                (r for r in cfg.registers.air_boosts if r.name == unit_name), None
             )
             if reg is None:
-                return [types.TextContent(type="text", text=f"Unknown fan unit: {unit_name}")]
+                return [types.TextContent(type="text", text=f"Unknown boost unit: {unit_name}")]
 
-            await client.set_fan_mode(reg, "high")
-
-            async def revert():
-                await asyncio.sleep(minutes * 60)
-                try:
-                    await client.set_fan_mode(reg, "normal")
-                    logger.info(f"Boost ended for {reg.label}, reverted to normal")
-                except Exception as e:
-                    logger.error(f"Failed to revert fan mode: {e}")
-
-            asyncio.create_task(revert())
+            await client.trigger_air_boost(reg)
 
             return [types.TextContent(
                 type="text",
                 text=(
-                    f"✅ {reg.label} boosted to high ventilation for {minutes} minutes. "
-                    f"Will revert to normal automatically."
+                    f"✅ Air boost triggered for {reg.label}. "
+                    f"SuperWISE will manage duration and revert automatically."
                 )
             )]
 

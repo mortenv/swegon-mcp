@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
-from .config import AppConfig, TemperatureRegister, FanModeRegister, StatusRegister
+from .config import AppConfig, TemperatureRegister, FanModeRegister, AirBoostRegister, StatusRegister
 
 
 class SwegonModbusClient:
@@ -82,6 +82,25 @@ class SwegonModbusClient:
                 )
             if result.isError():
                 raise ModbusException(f"Failed to write fan mode register {register.address}")
+
+    async def trigger_air_boost(self, register: AirBoostRegister) -> None:
+        """Trigger SuperWISE 'Air boost' (Manuell forsering).
+        SuperWISE manages boost duration and auto-revert — no timer needed here."""
+        async with self._connected() as client:
+            if register.type == "coil":
+                result = await client.write_coil(
+                    address=register.address,
+                    value=True,
+                    slave=self.config.modbus.unit_id,
+                )
+            else:
+                result = await client.write_register(
+                    address=register.address,
+                    value=1,
+                    slave=self.config.modbus.unit_id,
+                )
+            if result.isError():
+                raise ModbusException(f"Failed to trigger air boost register {register.address}")
 
     async def get_status(self, register: StatusRegister) -> float:
         async with self._connected() as client:

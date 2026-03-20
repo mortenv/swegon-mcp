@@ -52,7 +52,10 @@ registers:
       scale: 0.1
       unit: "°C"
 
-# Boost settings
-boost:
-  default_duration_minutes: 30
-  max_duration_minutes: 120
+  # SuperWISE "Air boost" / Manuell forsering registers
+  # Writing to these triggers a timed boost managed entirely by SuperWISE
+  air_boosts:
+    - name: "main"
+      label: "Main AHU"
+      address: 4001       # Check your SuperWISE Modbus export
+      type: "coil"        # Usually a coil (1-bit write)

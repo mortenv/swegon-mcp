@@ -46,12 +46,14 @@ Edit `config.yaml`:
 - Add fan units under `registers.fan_modes`
 - Find register addresses in the Modbus export from your SuperWISE unit
 
-### 3. Enable Modbus TCP on GOLD RX
+### 3. Enable Modbus TCP on SuperWISE
 
-On the unit control panel:
-```
-SETTINGS → INSTALLATION (code: 1111) → COMMUNICATION → ETHERNET → MODBUS TCP
-```
+On the SuperWISE web interface or control panel, enable Modbus TCP access.
+Refer to your SuperWISE II documentation for the exact menu path.
+
+> **Note:** While the GOLD RX AHU also supports Modbus TCP directly, commands
+> sent to it may be overridden by SuperWISE. Always target the SuperWISE unit
+> so it remains the authoritative controller.
 
 ### 4. Run
 
@@ -83,7 +85,7 @@ Add to your MCP config:
 | `get_temperature_setpoints` | Read current setpoints for all rooms |
 | `set_temperature` | Set temperature setpoint for a specific room |
 | `set_fan_mode` | Set fan mode (normal/high/away) |
-| `boost_fan` | Temporarily boost fan to high, auto-reverts |
+| `boost_fan` | Trigger SuperWISE Air boost (Manuell forsering) — SuperWISE manages duration and revert |
 
 ## Security
 

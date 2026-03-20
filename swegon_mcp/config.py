@@ -32,6 +32,15 @@ class FanModeRegister(BaseModel):
     values: dict[str, int] = {"normal": 0, "high": 2, "away": 1}
 
 
+class AirBoostRegister(BaseModel):
+    """SuperWISE 'Air boost' / Manuell forsering register.
+    Writing 1 triggers a timed boost; SuperWISE manages duration and auto-revert."""
+    name: str
+    label: str
+    address: int
+    type: Literal["coil", "holding"] = "coil"
+
+
 class StatusRegister(BaseModel):
     name: str
     label: str
@@ -44,6 +53,7 @@ class StatusRegister(BaseModel):
 class RegistersConfig(BaseModel):
     temperature_setpoints: list[TemperatureRegister] = Field(default_factory=list)
     fan_modes: list[FanModeRegister] = Field(default_factory=list)
+    air_boosts: list[AirBoostRegister] = Field(default_factory=list)
     status_reads: list[StatusRegister] = Field(default_factory=list)
 
 
