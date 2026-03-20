@@ -92,7 +92,7 @@ async def action_set_temperature(client, cfg):
         val = await client.get_temperature(reg)
         print(f"  ✅ Read back: {val:.1f} °C")
         if abs(val - temp) > 0.5:
-            print(f"  ⚠️  Value differs — SuperWISE may have clamped it.")
+            print("  ⚠️  Value differs — SuperWISE may have clamped it.")
     except Exception as e:
         print(f"  ❌ Failed: {e}")
 
@@ -110,7 +110,7 @@ async def action_boost(client, cfg):
     print(f"\n  Triggering air boost for {reg.label} ...")
     try:
         await client.trigger_air_boost(reg)
-        print(f"  ✅ Air boost triggered! SuperWISE manages duration and auto-revert.")
+        print("  ✅ Air boost triggered! SuperWISE manages duration and auto-revert.")
     except Exception as e:
         print(f"  ❌ Failed: {e}")
 
@@ -143,9 +143,13 @@ async def action_quick_check(client, cfg):
         try:
             async with client._connected() as modbus:
                 if reg.type == "coil":
-                    result = await modbus.read_coils(address=reg.address, count=1, slave=cfg.modbus.unit_id)
+                    result = await modbus.read_coils(
+                        address=reg.address, count=1, slave=cfg.modbus.unit_id
+                    )
                 else:
-                    result = await modbus.read_holding_registers(address=reg.address, count=1, slave=cfg.modbus.unit_id)
+                    result = await modbus.read_holding_registers(
+                        address=reg.address, count=1, slave=cfg.modbus.unit_id
+                    )
             if result.isError():
                 raise Exception(f"Modbus error at address {reg.address}")
             print(f"  ✅ Boost register readable  ({reg.label}, addr={reg.address})")
@@ -179,11 +183,11 @@ async def main():
     client = SwegonModbusClient(cfg)
 
     actions = {
-        "Quick connectivity check":         action_quick_check,
-        "Read all status values":           action_read_all_status,
-        "Read all temperature setpoints":   action_read_setpoints,
-        "Set temperature for a room":       action_set_temperature,
-        "Trigger air boost for a unit":     action_boost,
+        "Quick connectivity check": action_quick_check,
+        "Read all status values": action_read_all_status,
+        "Read all temperature setpoints": action_read_setpoints,
+        "Set temperature for a room": action_set_temperature,
+        "Trigger air boost for a unit": action_boost,
     }
 
     while True:

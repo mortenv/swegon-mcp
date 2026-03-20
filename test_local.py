@@ -24,13 +24,18 @@ No config.yaml needed — uses built-in test fixtures.
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from swegon_mcp.config import (
-    AppConfig, ModbusConfig, RegistersConfig, BoostConfig,
-    TemperatureRegister, AirBoostRegister, StatusRegister,
+    AppConfig,
+    ModbusConfig,
+    RegistersConfig,
+    BoostConfig,
+    TemperatureRegister,
+    AirBoostRegister,
+    StatusRegister,
 )
 from swegon_mcp.modbus_client import SwegonModbusClient
 import swegon_mcp.server as srv
@@ -42,17 +47,59 @@ TEST_CONFIG = AppConfig(
     modbus=ModbusConfig(host="192.168.100.2", port=502),
     registers=RegistersConfig(
         temperature_setpoints=[
-            TemperatureRegister(name="stue",    label="Stue",           address=1001, min=18, max=26, scale=0.01, unit="°C"),
-            TemperatureRegister(name="soverom", label="Soverom",        address=1002, min=15, max=22, scale=0.01, unit="°C"),
-            TemperatureRegister(name="kontor",  label="Kontor",         address=1003, min=16, max=25, scale=0.01, unit="°C"),
+            TemperatureRegister(
+                name="stue",
+                label="Stue",
+                address=1001,
+                min=18,
+                max=26,
+                scale=0.01,
+                unit="°C",
+            ),
+            TemperatureRegister(
+                name="soverom",
+                label="Soverom",
+                address=1002,
+                min=15,
+                max=22,
+                scale=0.01,
+                unit="°C",
+            ),
+            TemperatureRegister(
+                name="kontor",
+                label="Kontor",
+                address=1003,
+                min=16,
+                max=25,
+                scale=0.01,
+                unit="°C",
+            ),
         ],
         air_boosts=[
-            AirBoostRegister(name="stue",    label="Stue boost",     address=2001, type="coil"),
-            AirBoostRegister(name="soverom", label="Soverom boost",  address=2002, type="coil"),
+            AirBoostRegister(
+                name="stue", label="Stue boost", address=2001, type="coil"
+            ),
+            AirBoostRegister(
+                name="soverom", label="Soverom boost", address=2002, type="coil"
+            ),
         ],
         status_reads=[
-            StatusRegister(name="ute",      label="Utetemperatur",  address=3001, type="input", scale=0.01, unit="°C"),
-            StatusRegister(name="tilluft",  label="Tilluftstemperatur", address=3002, type="input", scale=0.01, unit="°C"),
+            StatusRegister(
+                name="ute",
+                label="Utetemperatur",
+                address=3001,
+                type="input",
+                scale=0.01,
+                unit="°C",
+            ),
+            StatusRegister(
+                name="tilluft",
+                label="Tilluftstemperatur",
+                address=3002,
+                type="input",
+                scale=0.01,
+                unit="°C",
+            ),
         ],
     ),
     boost=BoostConfig(),
@@ -78,6 +125,7 @@ def check(name: str, ok: bool, detail: str = ""):
 
 class _FakeResult:
     """Fake Modbus result object (synchronous .isError(), no await needed)."""
+
     def __init__(self, ok=True):
         self._ok = ok
         self.registers = [0]
@@ -125,6 +173,7 @@ def make_mock_client(temp_value=2100, status_value=-500):
 # Tests
 # ─────────────────────────────────────────────
 
+
 async def test_tool_listing():
     """Tools are listed with names and descriptions."""
     print("\n📋 Tool listing")
@@ -134,17 +183,19 @@ async def test_tool_listing():
     tools = await srv.list_tools()
     names = [t.name for t in tools]
 
-    check("get_status listed",              "get_status"              in names)
-    check("get_temperature_setpoints listed","get_temperature_setpoints" in names)
-    check("set_temperature listed",         "set_temperature"          in names)
-    check("set_fan_mode listed",            "set_fan_mode"             in names)
-    check("boost_fan listed",               "boost_fan"                in names)
+    check("get_status listed", "get_status" in names)
+    check("get_temperature_setpoints listed", "get_temperature_setpoints" in names)
+    check("set_temperature listed", "set_temperature" in names)
+    check("set_fan_mode listed", "set_fan_mode" in names)
+    check("boost_fan listed", "boost_fan" in names)
 
     set_temp_tool = next(t for t in tools if t.name == "set_temperature")
     rooms_in_schema = set_temp_tool.inputSchema["properties"]["room"].get("enum", [])
-    check("Rooms in set_temperature schema match config",
-          set(rooms_in_schema) == {"stue", "soverom", "kontor"},
-          f"Got: {rooms_in_schema}")
+    check(
+        "Rooms in set_temperature schema match config",
+        set(rooms_in_schema) == {"stue", "soverom", "kontor"},
+        f"Got: {rooms_in_schema}",
+    )
 
 
 async def test_get_status():
@@ -182,7 +233,9 @@ async def test_set_temperature_valid():
     srv._config = TEST_CONFIG
     srv._client = make_mock_client()
 
-    result = await srv.call_tool("set_temperature", {"room": "stue", "temperature": 22.0})
+    result = await srv.call_tool(
+        "set_temperature", {"room": "stue", "temperature": 22.0}
+    )
     text = result[0].text
 
     check("Returns success message", "✅" in text, text)
@@ -198,18 +251,34 @@ async def test_set_temperature_out_of_range():
     srv._client = make_mock_client()
 
     # Stue: min=18, max=26
-    too_hot = await srv.call_tool("set_temperature", {"room": "stue", "temperature": 30.0})
+    too_hot = await srv.call_tool(
+        "set_temperature", {"room": "stue", "temperature": 30.0}
+    )
     check("Rejects 30°C for Stue (max=26)", "❌" in too_hot[0].text, too_hot[0].text)
 
-    too_cold = await srv.call_tool("set_temperature", {"room": "stue", "temperature": 10.0})
+    too_cold = await srv.call_tool(
+        "set_temperature", {"room": "stue", "temperature": 10.0}
+    )
     check("Rejects 10°C for Stue (min=18)", "❌" in too_cold[0].text, too_cold[0].text)
 
     # Soverom has stricter max=22
-    borderline = await srv.call_tool("set_temperature", {"room": "soverom", "temperature": 23.0})
-    check("Rejects 23°C for Soverom (max=22)", "❌" in borderline[0].text, borderline[0].text)
+    borderline = await srv.call_tool(
+        "set_temperature", {"room": "soverom", "temperature": 23.0}
+    )
+    check(
+        "Rejects 23°C for Soverom (max=22)",
+        "❌" in borderline[0].text,
+        borderline[0].text,
+    )
 
-    boundary_ok = await srv.call_tool("set_temperature", {"room": "soverom", "temperature": 22.0})
-    check("Accepts 22°C for Soverom (at max)", "✅" in boundary_ok[0].text, boundary_ok[0].text)
+    boundary_ok = await srv.call_tool(
+        "set_temperature", {"room": "soverom", "temperature": 22.0}
+    )
+    check(
+        "Accepts 22°C for Soverom (at max)",
+        "✅" in boundary_ok[0].text,
+        boundary_ok[0].text,
+    )
 
 
 async def test_room_whitelist():
@@ -218,11 +287,20 @@ async def test_room_whitelist():
     srv._config = TEST_CONFIG
     srv._client = make_mock_client()
 
-    result = await srv.call_tool("set_temperature", {"room": "garasje", "temperature": 20.0})
-    check("Rejects unknown room 'garasje'", "Unknown room" in result[0].text, result[0].text)
+    result = await srv.call_tool(
+        "set_temperature", {"room": "garasje", "temperature": 20.0}
+    )
+    check(
+        "Rejects unknown room 'garasje'",
+        "Unknown room" in result[0].text,
+        result[0].text,
+    )
 
     result2 = await srv.call_tool("set_temperature", {"room": "", "temperature": 20.0})
-    check("Rejects empty room name", "Unknown room" in result2[0].text or "❌" in result2[0].text)
+    check(
+        "Rejects empty room name",
+        "Unknown room" in result2[0].text or "❌" in result2[0].text,
+    )
 
 
 async def test_boost_fan():
@@ -243,22 +321,34 @@ async def test_boost_fan():
     client.trigger_air_boost.reset_mock()
 
     unknown = await srv.call_tool("boost_fan", {"unit": "bod"})
-    check("Rejects unknown boost unit 'bod'", "Unknown boost unit" in unknown[0].text, unknown[0].text)
-    check("trigger_air_boost not called for unknown unit", client.trigger_air_boost.call_count == 0)
+    check(
+        "Rejects unknown boost unit 'bod'",
+        "Unknown boost unit" in unknown[0].text,
+        unknown[0].text,
+    )
+    check(
+        "trigger_air_boost not called for unknown unit",
+        client.trigger_air_boost.call_count == 0,
+    )
 
 
 async def test_no_revert_timer():
     """Server must not schedule its own revert timer (SuperWISE handles it)."""
     print("\n⏱️  No revert timer in server")
     import inspect
+
     source = inspect.getsource(srv)
-    check("No asyncio.create_task in server.py", "create_task" not in source,
-          "Found create_task — remove it, SuperWISE handles revert")
+    check(
+        "No asyncio.create_task in server.py",
+        "create_task" not in source,
+        "Found create_task — remove it, SuperWISE handles revert",
+    )
 
 
 # ─────────────────────────────────────────────
 # Runner
 # ─────────────────────────────────────────────
+
 
 async def main():
     print("=" * 55)
