@@ -46,7 +46,7 @@ class SwegonModbusClient:
             result = await client.read_holding_registers(
                 address=register.address,
                 count=1,
-                slave=self.config.modbus.unit_id,
+                device_id=self.config.modbus.unit_id,
             )
             if result.isError():
                 raise ModbusException(f"Failed to read register {register.address}")
@@ -66,7 +66,7 @@ class SwegonModbusClient:
             result = await client.write_register(
                 address=register.address,
                 value=raw,
-                slave=self.config.modbus.unit_id,
+                device_id=self.config.modbus.unit_id,
             )
             if result.isError():
                 raise ModbusException(f"Failed to write register {register.address}")
@@ -81,13 +81,13 @@ class SwegonModbusClient:
                 result = await client.write_coil(
                     address=register.address,
                     value=bool(value),
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             else:
                 result = await client.write_register(
                     address=register.address,
                     value=value,
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             if result.isError():
                 raise ModbusException(
@@ -102,13 +102,13 @@ class SwegonModbusClient:
                 result = await client.write_coil(
                     address=register.address,
                     value=True,
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             else:
                 result = await client.write_register(
                     address=register.address,
                     value=1,
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             if result.isError():
                 raise ModbusException(
@@ -121,13 +121,13 @@ class SwegonModbusClient:
                 result = await client.read_input_registers(
                     address=register.address,
                     count=1,
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             else:
                 result = await client.read_holding_registers(
                     address=register.address,
                     count=1,
-                    slave=self.config.modbus.unit_id,
+                    device_id=self.config.modbus.unit_id,
                 )
             if result.isError():
                 raise ModbusException(

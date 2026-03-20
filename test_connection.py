@@ -144,11 +144,11 @@ async def action_quick_check(client, cfg):
             async with client._connected() as modbus:
                 if reg.type == "coil":
                     result = await modbus.read_coils(
-                        address=reg.address, count=1, slave=cfg.modbus.unit_id
+                        address=reg.address, count=1, device_id=cfg.modbus.unit_id
                     )
                 else:
                     result = await modbus.read_holding_registers(
-                        address=reg.address, count=1, slave=cfg.modbus.unit_id
+                        address=reg.address, count=1, device_id=cfg.modbus.unit_id
                     )
             if result.isError():
                 raise Exception(f"Modbus error at address {reg.address}")
