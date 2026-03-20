@@ -261,7 +261,11 @@ def main():
         logger.info(f"HTTP/SSE server listening on {host}:{port}")
         uvicorn.run(http_app, host=host, port=port)
     else:
-        asyncio.run(mcp.server.stdio.stdio_server(app))
+        async def _run_stdio():
+            async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+                await app.run(read_stream, write_stream, app.create_initialization_options())
+
+        asyncio.run(_run_stdio())
 
 
 if __name__ == "__main__":
