@@ -1,4 +1,5 @@
 """Configuration loader for swegon-mcp."""
+
 from __future__ import annotations
 
 import yaml
@@ -35,6 +36,7 @@ class FanModeRegister(BaseModel):
 class AirBoostRegister(BaseModel):
     """SuperWISE 'Air boost' / Manuell forsering register.
     Writing 1 triggers a timed boost; SuperWISE manages duration and auto-revert."""
+
     name: str
     label: str
     address: int

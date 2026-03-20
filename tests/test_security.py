@@ -2,12 +2,17 @@
 Security tests: verify that the MCP server enforces the register whitelist
 and temperature range limits. No real Modbus connection needed.
 """
+
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 from swegon_mcp.config import (
-    AppConfig, ModbusConfig, RegistersConfig, BoostConfig,
-    TemperatureRegister, AirBoostRegister,
+    AppConfig,
+    ModbusConfig,
+    RegistersConfig,
+    BoostConfig,
+    TemperatureRegister,
+    AirBoostRegister,
 )
 from swegon_mcp.modbus_client import SwegonModbusClient
 
@@ -16,12 +21,25 @@ from swegon_mcp.modbus_client import SwegonModbusClient
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_config(rooms: list[dict] | None = None) -> AppConfig:
     """Build a minimal AppConfig with optional room overrides."""
     if rooms is None:
         rooms = [
-            {"name": "living_room", "label": "Living Room", "address": 1001, "min": 18, "max": 25},
-            {"name": "bedroom", "label": "Bedroom", "address": 1002, "min": 16, "max": 23},
+            {
+                "name": "living_room",
+                "label": "Living Room",
+                "address": 1001,
+                "min": 18,
+                "max": 25,
+            },
+            {
+                "name": "bedroom",
+                "label": "Bedroom",
+                "address": 1002,
+                "min": 16,
+                "max": 23,
+            },
         ]
     return AppConfig(
         modbus=ModbusConfig(host="127.0.0.1", port=502),
@@ -46,6 +64,7 @@ def client(config):
 # ---------------------------------------------------------------------------
 # Temperature range validation
 # ---------------------------------------------------------------------------
+
 
 class TestTemperatureRangeValidation:
     """set_temperature must reject values outside per-register min/max."""
@@ -88,6 +107,7 @@ class TestTemperatureRangeValidation:
 # Room whitelist enforcement (via server tool dispatch)
 # ---------------------------------------------------------------------------
 
+
 class TestRoomWhitelist:
     """The MCP server must only allow rooms listed in config."""
 
@@ -100,7 +120,9 @@ class TestRoomWhitelist:
         srv._config = config
         srv._client = SwegonModbusClient(config)
 
-        result = await srv.call_tool("set_temperature", {"room": "garage", "temperature": 20.0})
+        result = await srv.call_tool(
+            "set_temperature", {"room": "garage", "temperature": 20.0}
+        )
         assert len(result) == 1
         assert "Unknown room" in result[0].text
 
@@ -116,7 +138,9 @@ class TestRoomWhitelist:
         client.set_temperature = AsyncMock(side_effect=ConnectionError("no hw"))
         srv._client = client
 
-        result = await srv.call_tool("set_temperature", {"room": "living_room", "temperature": 21.0})
+        result = await srv.call_tool(
+            "set_temperature", {"room": "living_room", "temperature": 21.0}
+        )
         assert "Unknown room" not in result[0].text
         assert "Connection error" in result[0].text
 
@@ -136,6 +160,7 @@ class TestRoomWhitelist:
 # ---------------------------------------------------------------------------
 # Boost delegates to SuperWISE (no revert timer in MCP server)
 # ---------------------------------------------------------------------------
+
 
 class TestBoostDelegation:
     """Boost should call trigger_air_boost and NOT schedule any revert timer."""
@@ -159,6 +184,7 @@ class TestBoostDelegation:
         """server.py should not use asyncio.create_task for revert logic."""
         import inspect
         import swegon_mcp.server as srv
+
         source = inspect.getsource(srv)
         assert "create_task" not in source, (
             "server.py must not schedule revert timers — SuperWISE handles this"

@@ -1,4 +1,5 @@
 """Modbus TCP client wrapper for Swegon SuperWISE."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,7 +7,13 @@ from contextlib import asynccontextmanager
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
-from .config import AppConfig, TemperatureRegister, FanModeRegister, AirBoostRegister, StatusRegister
+from .config import (
+    AppConfig,
+    TemperatureRegister,
+    FanModeRegister,
+    AirBoostRegister,
+    StatusRegister,
+)
 
 
 class SwegonModbusClient:
@@ -46,7 +53,9 @@ class SwegonModbusClient:
             raw = result.registers[0]
             return raw * register.scale
 
-    async def set_temperature(self, register: TemperatureRegister, value: float) -> None:
+    async def set_temperature(
+        self, register: TemperatureRegister, value: float
+    ) -> None:
         if not (register.min <= value <= register.max):
             raise ValueError(
                 f"Temperature {value} out of allowed range "
@@ -81,7 +90,9 @@ class SwegonModbusClient:
                     slave=self.config.modbus.unit_id,
                 )
             if result.isError():
-                raise ModbusException(f"Failed to write fan mode register {register.address}")
+                raise ModbusException(
+                    f"Failed to write fan mode register {register.address}"
+                )
 
     async def trigger_air_boost(self, register: AirBoostRegister) -> None:
         """Trigger SuperWISE 'Air boost' (Manuell forsering).
@@ -100,7 +111,9 @@ class SwegonModbusClient:
                     slave=self.config.modbus.unit_id,
                 )
             if result.isError():
-                raise ModbusException(f"Failed to trigger air boost register {register.address}")
+                raise ModbusException(
+                    f"Failed to trigger air boost register {register.address}"
+                )
 
     async def get_status(self, register: StatusRegister) -> float:
         async with self._connected() as client:
@@ -117,6 +130,8 @@ class SwegonModbusClient:
                     slave=self.config.modbus.unit_id,
                 )
             if result.isError():
-                raise ModbusException(f"Failed to read status register {register.address}")
+                raise ModbusException(
+                    f"Failed to read status register {register.address}"
+                )
             raw = result.registers[0]
             return raw * register.scale

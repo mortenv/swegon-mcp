@@ -1,6 +1,8 @@
 """MCP server exposing Swegon WISE ventilation control tools."""
+
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -126,7 +128,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     try:
         if name == "get_status":
             if not cfg.registers.status_reads:
-                return [types.TextContent(type="text", text="No status registers configured.")]
+                return [
+                    types.TextContent(
+                        type="text", text="No status registers configured."
+                    )
+                ]
             lines = []
             for reg in cfg.registers.status_reads:
                 value = await client.get_status(reg)
@@ -135,7 +141,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
         elif name == "get_temperature_setpoints":
             if not cfg.registers.temperature_setpoints:
-                return [types.TextContent(type="text", text="No temperature registers configured.")]
+                return [
+                    types.TextContent(
+                        type="text", text="No temperature registers configured."
+                    )
+                ]
             lines = []
             for reg in cfg.registers.temperature_setpoints:
                 value = await client.get_temperature(reg)
@@ -146,15 +156,20 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             room_name = arguments["room"]
             temperature = float(arguments["temperature"])
             reg = next(
-                (r for r in cfg.registers.temperature_setpoints if r.name == room_name), None
+                (r for r in cfg.registers.temperature_setpoints if r.name == room_name),
+                None,
             )
             if reg is None:
-                return [types.TextContent(type="text", text=f"Unknown room: {room_name}")]
+                return [
+                    types.TextContent(type="text", text=f"Unknown room: {room_name}")
+                ]
             await client.set_temperature(reg, temperature)
-            return [types.TextContent(
-                type="text",
-                text=f"✅ {reg.label} temperature setpoint set to {temperature:.1f} {reg.unit}"
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"✅ {reg.label} temperature setpoint set to {temperature:.1f} {reg.unit}",
+                )
+            ]
 
         elif name == "set_fan_mode":
             unit_name = arguments["unit"]
@@ -163,12 +178,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
                 (r for r in cfg.registers.fan_modes if r.name == unit_name), None
             )
             if reg is None:
-                return [types.TextContent(type="text", text=f"Unknown fan unit: {unit_name}")]
+                return [
+                    types.TextContent(
+                        type="text", text=f"Unknown fan unit: {unit_name}"
+                    )
+                ]
             await client.set_fan_mode(reg, mode)
-            return [types.TextContent(
-                type="text",
-                text=f"✅ {reg.label} fan mode set to '{mode}'"
-            )]
+            return [
+                types.TextContent(
+                    type="text", text=f"✅ {reg.label} fan mode set to '{mode}'"
+                )
+            ]
 
         elif name == "boost_fan":
             unit_name = arguments["unit"]
@@ -176,17 +196,23 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
                 (r for r in cfg.registers.air_boosts if r.name == unit_name), None
             )
             if reg is None:
-                return [types.TextContent(type="text", text=f"Unknown boost unit: {unit_name}")]
+                return [
+                    types.TextContent(
+                        type="text", text=f"Unknown boost unit: {unit_name}"
+                    )
+                ]
 
             await client.trigger_air_boost(reg)
 
-            return [types.TextContent(
-                type="text",
-                text=(
-                    f"✅ Air boost triggered for {reg.label}. "
-                    f"SuperWISE will manage duration and revert automatically."
+            return [
+                types.TextContent(
+                    type="text",
+                    text=(
+                        f"✅ Air boost triggered for {reg.label}. "
+                        f"SuperWISE will manage duration and revert automatically."
+                    ),
                 )
-            )]
+            ]
 
         else:
             return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
