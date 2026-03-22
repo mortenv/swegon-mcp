@@ -2,7 +2,7 @@
 # Copy to config.yaml and adjust to your setup
 
 modbus:
-  host: "192.168.1.100"   # IP address of your SuperWISE unit
+  host: "10.0.0.100"      # IP address of your SuperWISE unit
   port: 502               # Modbus TCP port (default: 502)
   unit_id: 1              # Modbus unit/slave ID
   timeout: 5              # Connection timeout in seconds
@@ -59,3 +59,32 @@ registers:
       label: "Main AHU"
       address: 4001       # Check your SuperWISE Modbus export
       type: "coil"        # Usually a coil (1-bit write)
+
+# SuperWISE Web UI Socket.IO API (for damper control)
+# Controls damper functions like "Funksjon konstant luftmengde" via the
+# SuperWISE web interface's Socket.IO API. Requires a web UI user account.
+# Uncomment and configure to enable damper tools.
+
+# superwise:
+#   host: "10.0.0.100"          # SuperWISE web UI address
+#   user: "user@example.com"    # Web UI login email (or set SWEGON_SUPERWISE_USER env var)
+#   password: "your-password"   # Web UI login password (or set SWEGON_SUPERWISE_PASSWORD env var)
+#   timeout: 15                 # Socket.IO response timeout in seconds
+
+# damper_rooms:
+#   - name: "bathroom_1"
+#     label: "Floor 1 - Bathroom 1 - Wise Damper"
+#     location:
+#       ahu: 1
+#       grouping: 1              # Floor/plan index in SuperWISE tree
+#       node_container: 2        # Room node container index
+#       node: 3                  # Damper node index
+#     type_id: 1011              # IO data type ID (1011 = constant airflow function)
+#
+#   - name: "laundry_room"
+#     label: "Floor 1 - Laundry Room - Wise Damper"
+#     location:
+#       ahu: 1
+#       grouping: 1
+#       node_container: 4
+#       node: 10

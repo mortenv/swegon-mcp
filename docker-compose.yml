@@ -9,6 +9,9 @@ services:
     environment:
       # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
       SWEGON_API_KEY: "${SWEGON_API_KEY}"
+      # SuperWISE web UI credentials for damper control (optional)
+      SWEGON_SUPERWISE_USER: "${SWEGON_SUPERWISE_USER:-}"
+      SWEGON_SUPERWISE_PASSWORD: "${SWEGON_SUPERWISE_PASSWORD:-}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

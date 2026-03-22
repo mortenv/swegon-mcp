@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import yaml
 from pathlib import Path
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModbusConfig(BaseModel):
@@ -64,10 +65,46 @@ class BoostConfig(BaseModel):
     max_duration_minutes: int = 120
 
 
+class SuperWiseConfig(BaseModel):
+    host: str
+    user: str = ""
+    password: str = ""
+    timeout: int = 15
+
+    @model_validator(mode="after")
+    def _env_overrides(self):
+        if not self.user:
+            self.user = os.environ.get("SWEGON_SUPERWISE_USER", "")
+        if not self.password:
+            self.password = os.environ.get("SWEGON_SUPERWISE_PASSWORD", "")
+        return self
+
+
+class DamperLocation(BaseModel):
+    system: int = 0
+    superwise: int = 0
+    director: int = 0
+    ahu: int = 1
+    grouping: int
+    function_group: int = 0
+    node_container: int
+    node: int
+
+
+class DamperRoom(BaseModel):
+    name: str
+    label: str
+    location: DamperLocation
+    type_id: int = 1011
+    io_name: str = ""
+
+
 class AppConfig(BaseModel):
     modbus: ModbusConfig
     registers: RegistersConfig = Field(default_factory=RegistersConfig)
     boost: BoostConfig = Field(default_factory=BoostConfig)
+    superwise: SuperWiseConfig | None = None
+    damper_rooms: list[DamperRoom] = Field(default_factory=list)
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:

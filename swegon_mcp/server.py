@@ -12,12 +12,14 @@ from mcp.server import Server
 
 from .config import load_config
 from .modbus_client import SwegonModbusClient
+from .superwise_client import SuperWiseClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("swegon-mcp")
 
 app = Server("swegon-mcp")
 _client: SwegonModbusClient | None = None
+_superwise_client: SuperWiseClient | None = None
 _config = None
 
 
@@ -117,16 +119,68 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
     ]
+
+    # Damper tools (only when superwise is configured)
+    if cfg.superwise and cfg.damper_rooms:
+        room_names = [r.name for r in cfg.damper_rooms]
+        tools.append(
+            types.Tool(
+                name="get_damper_status",
+                description=(
+                    "Get the current damper function status (on/off) for rooms. "
+                    f"Available rooms: {room_names}"
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "room": {
+                            "type": "string",
+                            "description": (
+                                f"Room name. One of: {room_names}. "
+                                "Omit to get status for all rooms."
+                            ),
+                            "enum": room_names,
+                        },
+                    },
+                },
+            )
+        )
+        tools.append(
+            types.Tool(
+                name="set_damper",
+                description=(
+                    "Set the damper function value (constant airflow) for a room. "
+                    f"Available rooms: {room_names}"
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "room": {
+                            "type": "string",
+                            "description": f"Room name. One of: {room_names}",
+                            "enum": room_names,
+                        },
+                        "value": {
+                            "type": "integer",
+                            "description": "0 = off, 1 = on",
+                            "enum": [0, 1],
+                        },
+                    },
+                    "required": ["room", "value"],
+                },
+            )
+        )
+
     return tools
 
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    client = get_client()
     cfg = _config
 
     try:
         if name == "get_status":
+            client = get_client()
             if not cfg.registers.status_reads:
                 return [
                     types.TextContent(
@@ -140,6 +194,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             return [types.TextContent(type="text", text="\n".join(lines))]
 
         elif name == "get_temperature_setpoints":
+            client = get_client()
             if not cfg.registers.temperature_setpoints:
                 return [
                     types.TextContent(
@@ -153,6 +208,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             return [types.TextContent(type="text", text="\n".join(lines))]
 
         elif name == "set_temperature":
+            client = get_client()
             room_name = arguments["room"]
             temperature = float(arguments["temperature"])
             reg = next(
@@ -172,6 +228,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             ]
 
         elif name == "set_fan_mode":
+            client = get_client()
             unit_name = arguments["unit"]
             mode = arguments["mode"]
             reg = next(
@@ -191,6 +248,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             ]
 
         elif name == "boost_fan":
+            client = get_client()
             unit_name = arguments["unit"]
             reg = next(
                 (r for r in cfg.registers.air_boosts if r.name == unit_name), None
@@ -211,6 +269,63 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
                         f"✅ Air boost triggered for {reg.label}. "
                         f"SuperWISE will manage duration and revert automatically."
                     ),
+                )
+            ]
+
+        elif name == "get_damper_status":
+            if not _superwise_client:
+                return [
+                    types.TextContent(
+                        type="text", text="SuperWISE damper control not configured."
+                    )
+                ]
+            room_name = arguments.get("room")
+            rooms = cfg.damper_rooms
+            if room_name:
+                rooms = [r for r in rooms if r.name == room_name]
+                if not rooms:
+                    return [
+                        types.TextContent(
+                            type="text", text=f"Unknown room: {room_name}"
+                        )
+                    ]
+
+            lines = []
+            for room in rooms:
+                try:
+                    value = await _superwise_client.get_damper_value(room)
+                    status = "ON" if value == 1 else "OFF" if value == 0 else str(value)
+                    lines.append(f"{room.label}: {status} ({value})")
+                except Exception as e:
+                    lines.append(f"{room.label}: Error - {e}")
+            return [types.TextContent(type="text", text="\n".join(lines))]
+
+        elif name == "set_damper":
+            if not _superwise_client:
+                return [
+                    types.TextContent(
+                        type="text", text="SuperWISE damper control not configured."
+                    )
+                ]
+            room_name = arguments["room"]
+            value = int(arguments["value"])
+            room = next((r for r in cfg.damper_rooms if r.name == room_name), None)
+            if room is None:
+                return [
+                    types.TextContent(type="text", text=f"Unknown room: {room_name}")
+                ]
+            resp = await _superwise_client.set_damper_value(room, value)
+            success = resp.get("success", [])
+            if success:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f'✅ {room.label}: "{success[0]["name"]}" set to {success[0]["value"]}',
+                    )
+                ]
+            return [
+                types.TextContent(
+                    type="text", text=f"✅ {room.label} damper set to {value}"
                 )
             ]
 
@@ -241,9 +356,12 @@ def main():
     if args:
         config_path = args[0]
 
-    global _client, _config
+    global _client, _superwise_client, _config
     _config = load_config(config_path)
     _client = SwegonModbusClient(_config)
+
+    if _config.superwise:
+        _superwise_client = SuperWiseClient(_config)
 
     logger.info(
         f"Starting swegon-mcp [{mode}] | "
@@ -251,6 +369,13 @@ def main():
         f"Rooms: {[r.name for r in _config.registers.temperature_setpoints]} | "
         f"Fan units: {[f.name for f in _config.registers.fan_modes]}"
     )
+
+    if _config.superwise and _config.damper_rooms:
+        logger.info(
+            f"Damper control enabled | "
+            f"Host: {_config.superwise.host} | "
+            f"Rooms: {[r.name for r in _config.damper_rooms]}"
+        )
 
     if mode == "http":
         import uvicorn

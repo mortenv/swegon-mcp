@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from swegon_mcp.config import load_config
 from swegon_mcp.modbus_client import SwegonModbusClient
+from swegon_mcp.superwise_client import SuperWiseClient
 
 
 def pick(prompt: str, options: list[str]) -> str:
@@ -45,7 +46,7 @@ def ask_float(prompt: str, min_val: float, max_val: float) -> float:
             print("  Enter a valid number")
 
 
-async def action_read_all_status(client, cfg):
+async def action_read_all_status(client, cfg, sw_client=None):
     print("\n📊 Reading status...")
     if not cfg.registers.status_reads:
         print("  No status registers configured.")
@@ -58,7 +59,7 @@ async def action_read_all_status(client, cfg):
             print(f"  ❌ {reg.label}: {e}")
 
 
-async def action_read_setpoints(client, cfg):
+async def action_read_setpoints(client, cfg, sw_client=None):
     print("\n🌡️  Reading temperature setpoints...")
     if not cfg.registers.temperature_setpoints:
         print("  No temperature registers configured.")
@@ -71,7 +72,7 @@ async def action_read_setpoints(client, cfg):
             print(f"  ❌ {reg.label}: {e}")
 
 
-async def action_set_temperature(client, cfg):
+async def action_set_temperature(client, cfg, sw_client=None):
     if not cfg.registers.temperature_setpoints:
         print("  No temperature registers configured.")
         return
@@ -97,7 +98,7 @@ async def action_set_temperature(client, cfg):
         print(f"  ❌ Failed: {e}")
 
 
-async def action_boost(client, cfg):
+async def action_boost(client, cfg, sw_client=None):
     if not cfg.registers.air_boosts:
         print("  No air boost registers configured.")
         return
@@ -115,7 +116,80 @@ async def action_boost(client, cfg):
         print(f"  ❌ Failed: {e}")
 
 
-async def action_quick_check(client, cfg):
+async def action_damper_status(client, cfg, sw_client=None):
+    """Read damper status for all configured rooms."""
+    if not cfg.damper_rooms or not sw_client:
+        print("  No damper rooms configured (or superwise not configured).")
+        return
+
+    print("\n🔧 Reading damper status...")
+    for room in cfg.damper_rooms:
+        try:
+            val = await sw_client.get_damper_value(room)
+            status = "ON" if val == 1 else "OFF" if val == 0 else str(val)
+            print(f"  {room.name:<20} {room.label:<40} {status} ({val})")
+        except Exception as e:
+            print(f"  {room.name:<20} {room.label:<40} ❌ {e}")
+
+
+async def action_set_damper(client, cfg, sw_client=None):
+    """Toggle a damper value for a room."""
+    if not cfg.damper_rooms or not sw_client:
+        print("  No damper rooms configured (or superwise not configured).")
+        return
+
+    labels = [f"{r.name} — {r.label}" for r in cfg.damper_rooms]
+    chosen_label = pick("Which room?", labels)
+    room = cfg.damper_rooms[labels.index(chosen_label)]
+
+    value_label = pick(f"Set {room.name} to:", ["OFF (0)", "ON (1)"])
+    value = 1 if "ON" in value_label else 0
+
+    print(f"\n  Setting {room.label} → {'ON' if value else 'OFF'} ...")
+    try:
+        result = await sw_client.set_damper_value(room, value)
+        success = result.get("success", [])
+        if success:
+            print(f'  ✅ Done! "{success[0]["name"]}" = {success[0]["value"]}')
+        else:
+            print("  ✅ Done!")
+
+        # Read back
+        readback = await sw_client.get_damper_value(room)
+        status = "ON" if readback == 1 else "OFF"
+        print(f"  ✅ Read back: {status} ({readback})")
+    except Exception as e:
+        print(f"  ❌ Failed: {e}")
+
+
+async def action_set_all_dampers(client, cfg, sw_client=None):
+    """Set all dampers to the same value."""
+    if not cfg.damper_rooms or not sw_client:
+        print("  No damper rooms configured (or superwise not configured).")
+        return
+
+    value_label = pick("Set ALL dampers to:", ["OFF (0)", "ON (1)"])
+    value = 1 if "ON" in value_label else 0
+
+    print(f"\n  Setting all dampers → {'ON' if value else 'OFF'} ...")
+    for room in cfg.damper_rooms:
+        try:
+            await sw_client.set_damper_value(room, value)
+            print(f"  ✅ {room.name:<20} {room.label}")
+        except Exception as e:
+            print(f"  ❌ {room.name:<20} {e}")
+
+    print("\n  Reading back...")
+    for room in cfg.damper_rooms:
+        try:
+            val = await sw_client.get_damper_value(room)
+            status = "ON" if val == 1 else "OFF"
+            print(f"  {room.name:<20} {room.label:<40} {status} ({val})")
+        except Exception as e:
+            print(f"  {room.name:<20} {room.label:<40} ❌ {e}")
+
+
+async def action_quick_check(client, cfg, sw_client=None):
     """Read one register of each type to verify connectivity."""
     print("\n🔌 Quick connectivity check...")
     ok = True
@@ -157,10 +231,20 @@ async def action_quick_check(client, cfg):
             print(f"  ❌ Boost register FAILED: {e}")
             ok = False
 
+    if cfg.damper_rooms and sw_client:
+        room = cfg.damper_rooms[0]
+        try:
+            val = await sw_client.get_damper_value(room)
+            status = "ON" if val == 1 else "OFF"
+            print(f"  ✅ Damper read OK  ({room.label}: {status})")
+        except Exception as e:
+            print(f"  ❌ Damper read FAILED: {e}")
+            ok = False
+
     if ok:
         print("\n  ✅ SuperWISE connection looks good!")
     else:
-        print("\n  ⚠️  Some registers failed. Check addresses in config.yaml.")
+        print("\n  ⚠️  Some checks failed. Check config.yaml.")
 
 
 async def main():
@@ -176,11 +260,18 @@ async def main():
         print(f"\n❌ {e}")
         sys.exit(1)
 
-    print(f"\nSuperWISE: {cfg.modbus.host}:{cfg.modbus.port}")
+    print(f"\nModbus:    {cfg.modbus.host}:{cfg.modbus.port}")
     print(f"Rooms:     {[r.name for r in cfg.registers.temperature_setpoints]}")
     print(f"Boosts:    {[b.name for b in cfg.registers.air_boosts]}")
 
     client = SwegonModbusClient(cfg)
+    sw_client = None
+
+    if cfg.superwise and cfg.damper_rooms:
+        sw_client = SuperWiseClient(cfg)
+        print(f"Damper:    {cfg.superwise.host} ({len(cfg.damper_rooms)} rooms)")
+    else:
+        print("Damper:    not configured")
 
     actions = {
         "Quick connectivity check": action_quick_check,
@@ -190,6 +281,11 @@ async def main():
         "Trigger air boost for a unit": action_boost,
     }
 
+    if sw_client:
+        actions["Read damper status (all rooms)"] = action_damper_status
+        actions["Set damper for a room"] = action_set_damper
+        actions["Set ALL dampers on/off"] = action_set_all_dampers
+
     while True:
         choices = list(actions.keys()) + ["Exit"]
         chosen = pick("What do you want to do?", choices)
@@ -198,7 +294,7 @@ async def main():
             print("\nBye!")
             break
 
-        await actions[chosen](client, cfg)
+        await actions[chosen](client, cfg, sw_client)
 
         again = input("\n  Do another? (y/n): ").strip().lower()
         if again != "y":

@@ -44,7 +44,7 @@ import swegon_mcp.server as srv
 # Test config — mirrors a typical home setup
 # ─────────────────────────────────────────────
 TEST_CONFIG = AppConfig(
-    modbus=ModbusConfig(host="192.168.100.2", port=502),
+    modbus=ModbusConfig(host="10.0.0.100", port=502),
     registers=RegistersConfig(
         temperature_setpoints=[
             TemperatureRegister(
