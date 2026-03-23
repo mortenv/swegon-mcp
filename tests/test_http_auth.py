@@ -8,7 +8,6 @@ Starlette app that mounts only the middleware — no real SSE stream involved.
 
 import pytest
 from starlette.applications import Starlette
-from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -20,7 +19,7 @@ VALID_KEY = "test-secret-key-abc123"
 WRONG_KEY = "wrong-key"
 
 
-def make_auth_test_app(api_key: str) -> Starlette:
+def make_auth_test_app(api_key: str):
     """Minimal app with only auth middleware and a dummy /probe endpoint."""
 
     async def probe(request: Request) -> JSONResponse:
@@ -29,10 +28,10 @@ def make_auth_test_app(api_key: str) -> Starlette:
     async def health(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "swegon-mcp"})
 
-    return Starlette(
+    app = Starlette(
         routes=[Route("/health", health), Route("/probe", probe)],
-        middleware=[Middleware(ApiKeyMiddleware, api_key=api_key)],
     )
+    return ApiKeyMiddleware(app, api_key=api_key)
 
 
 @pytest.fixture

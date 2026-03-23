@@ -9,16 +9,16 @@ Wraps the MCP server in a Starlette app with:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
 import time
 import uuid
+from urllib.parse import parse_qs
 
 from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
-from starlette.middleware import Middleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
@@ -41,39 +41,66 @@ _PUBLIC_PATHS = {
 }
 
 
-def _validate_auth(request: Request, api_key: str) -> bool:
-    """Return True if request carries a valid credential."""
-    # 1. X-API-Key header
-    provided = request.headers.get("X-API-Key") or request.query_params.get("api_key")
-    if provided and secrets.compare_digest(provided, api_key):
-        return True
+class ApiKeyMiddleware:
+    """Pure ASGI middleware for API key + Bearer token auth.
 
-    # 2. Bearer token (OAuth)
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        stored_key = _bearer_tokens.get(token)
-        if stored_key and secrets.compare_digest(stored_key, api_key):
-            return True
-
-    return False
-
-
-class ApiKeyMiddleware(BaseHTTPMiddleware):
-    """Auth middleware — allows X-API-Key and Bearer tokens."""
+    Uses raw ASGI instead of BaseHTTPMiddleware to avoid breaking
+    SSE/streaming responses (Starlette BaseHTTPMiddleware wraps the
+    response body iterator which is incompatible with SSE).
+    """
 
     def __init__(self, app, api_key: str) -> None:
-        super().__init__(app)
+        self.app = app
         self.api_key = api_key
 
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path in _PUBLIC_PATHS:
-            return await call_next(request)
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        if not _validate_auth(request, self.api_key):
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        path = scope.get("path", "")
+        if path in _PUBLIC_PATHS:
+            await self.app(scope, receive, send)
+            return
 
-        return await call_next(request)
+        # Check auth: X-API-Key header, ?api_key= query param, or Bearer token
+        headers = dict(scope.get("headers", []))
+
+        # 1. X-API-Key header
+        provided = (headers.get(b"x-api-key") or b"").decode()
+
+        # 2. ?api_key= query param
+        if not provided:
+            qs = parse_qs(scope.get("query_string", b"").decode())
+            provided = qs.get("api_key", [""])[0]
+
+        # 3. Bearer token (OAuth)
+        if not provided:
+            auth_header = (headers.get(b"authorization") or b"").decode()
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]
+                stored_key = _bearer_tokens.get(token)
+                if stored_key and secrets.compare_digest(stored_key, self.api_key):
+                    await self.app(scope, receive, send)
+                    return
+
+        if provided and secrets.compare_digest(provided, self.api_key):
+            await self.app(scope, receive, send)
+            return
+
+        # Reject
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    [b"content-type", b"application/json"],
+                    [b"content-length", str(len(body)).encode()],
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
 
 
 def create_app(api_key: str) -> Starlette:  # noqa: C901
@@ -165,9 +192,8 @@ def create_app(api_key: str) -> Starlette:  # noqa: C901
             Route("/oauth/token", handle_token, methods=["POST"]),
             Mount("/messages/", app=sse.handle_post_message),
         ],
-        middleware=[Middleware(ApiKeyMiddleware, api_key=api_key)],
     )
-    return starlette_app
+    return ApiKeyMiddleware(starlette_app, api_key=api_key)
 
 
 def get_api_key() -> str:
