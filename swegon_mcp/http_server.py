@@ -27,6 +27,16 @@ from .server import app as mcp_app
 
 logger = logging.getLogger("swegon-mcp.http")
 
+
+def _flatten_exception(exc: BaseException) -> list[BaseException]:
+    """Recursively extract leaf exceptions from ExceptionGroups."""
+    if hasattr(exc, "exceptions"):  # BaseExceptionGroup
+        out: list[BaseException] = []
+        for sub in exc.exceptions:
+            out.extend(_flatten_exception(sub))
+        return out
+    return [exc]
+
 # In-memory stores (cleared on restart)
 _registered_clients: dict[str, str] = {}  # client_id → client_secret
 _bearer_tokens: dict[str, str] = {}  # token → api_key
@@ -107,14 +117,30 @@ def create_app(api_key: str) -> Starlette:  # noqa: C901
     sse = SseServerTransport("/messages/")
 
     async def handle_sse(request: Request) -> Response:
-        async with sse.connect_sse(
-            request.scope, request.receive, request._send
-        ) as streams:
-            await mcp_app.run(
-                streams[0],
-                streams[1],
-                mcp_app.create_initialization_options(),
+        try:
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as streams:
+                await mcp_app.run(
+                    streams[0],
+                    streams[1],
+                    mcp_app.create_initialization_options(),
+                )
+        except BaseException as exc:
+            # Client disconnected while a tool was running — log and move on.
+            # anyio wraps ClosedResourceError in ExceptionGroup (BaseException),
+            # so we must catch BaseException here.
+            flat = _flatten_exception(exc)
+            is_disconnect = any(
+                "Closed" in type(e).__name__ or "BrokenPipe" in type(e).__name__
+                for e in flat
             )
+            if is_disconnect:
+                logger.debug("SSE client disconnected")
+            elif isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            else:
+                logger.warning("SSE session error: %s", exc, exc_info=True)
         return Response()
 
     async def handle_health(request: Request) -> JSONResponse:
