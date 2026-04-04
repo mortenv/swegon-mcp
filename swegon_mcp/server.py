@@ -256,60 +256,39 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         elif name == "boost_fan":
             unit_name = arguments["unit"]
 
-            # Try Modbus first
-            reg = next(
-                (r for r in cfg.registers.air_boosts if r.name == unit_name), None
-            )
-            if reg is not None:
-                client = get_client()
-                try:
-                    await client.trigger_air_boost(reg)
-                    return [
-                        types.TextContent(
-                            type="text",
-                            text=(
-                                f"✅ Air boost triggered for {reg.label}. "
-                                f"SuperWISE will manage duration and revert automatically."
-                            ),
-                        )
-                    ]
-                except Exception as modbus_err:
-                    logger.warning(
-                        "Modbus boost failed for %s: %s, trying Socket.IO fallback",
-                        unit_name, modbus_err,
-                    )
-
-            # Fallback: boost via SuperWISE Socket.IO (set damper to 1)
+            # Damper rooms go directly via Socket.IO
             if _superwise_client and cfg.damper_rooms:
                 damper_room = next(
                     (r for r in cfg.damper_rooms if r.name == unit_name), None
                 )
                 if damper_room:
-                    resp = await _superwise_client.set_damper_value(damper_room, 1)
-                    success = resp.get("success", [])
-                    if success:
-                        return [
-                            types.TextContent(
-                                type="text",
-                                text=f"✅ Air boost triggered for {damper_room.label} (via SuperWISE).",
-                            )
-                        ]
+                    await _superwise_client.set_damper_value(damper_room, 1)
                     return [
                         types.TextContent(
                             type="text",
-                            text=f"✅ Air boost triggered for {damper_room.label} (via SuperWISE).",
+                            text=f"✅ Air boost triggered for {damper_room.label}.",
                         )
                     ]
 
+            # Other rooms use Modbus
+            reg = next(
+                (r for r in cfg.registers.air_boosts if r.name == unit_name), None
+            )
             if reg is None:
                 return [
                     types.TextContent(
                         type="text", text=f"Unknown boost unit: {unit_name}"
                     )
                 ]
+            client = get_client()
+            await client.trigger_air_boost(reg)
             return [
                 types.TextContent(
-                    type="text", text=f"❌ Boost failed for {reg.label}"
+                    type="text",
+                    text=(
+                        f"✅ Air boost triggered for {reg.label}. "
+                        f"SuperWISE will manage duration and revert automatically."
+                    ),
                 )
             ]
 
