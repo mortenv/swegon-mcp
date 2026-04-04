@@ -96,7 +96,7 @@ class DamperRoom(BaseModel):
     label: str
     location: DamperLocation
     type_id: int = 1011
-    io_name: str = ""
+    io_name: str = "Feil Funksjon konstant luftmengde"
 
 
 class AppConfig(BaseModel):
