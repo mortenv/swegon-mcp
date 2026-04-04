@@ -39,6 +39,12 @@ async def list_tools() -> list[types.Tool]:
         fan_modes_example = list(cfg.registers.fan_modes[0].values.keys())
 
     boost_units = [b.name for b in cfg.registers.air_boosts]
+    # Also include damper rooms as boostable units (via Socket.IO fallback)
+    if cfg.superwise and cfg.damper_rooms:
+        damper_names = {r.name for r in cfg.damper_rooms}
+        for name in damper_names:
+            if name not in boost_units:
+                boost_units.append(name)
 
     tools = [
         types.Tool(
@@ -248,27 +254,62 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             ]
 
         elif name == "boost_fan":
-            client = get_client()
             unit_name = arguments["unit"]
+
+            # Try Modbus first
             reg = next(
                 (r for r in cfg.registers.air_boosts if r.name == unit_name), None
             )
+            if reg is not None:
+                client = get_client()
+                try:
+                    await client.trigger_air_boost(reg)
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text=(
+                                f"✅ Air boost triggered for {reg.label}. "
+                                f"SuperWISE will manage duration and revert automatically."
+                            ),
+                        )
+                    ]
+                except Exception as modbus_err:
+                    logger.warning(
+                        "Modbus boost failed for %s: %s, trying Socket.IO fallback",
+                        unit_name, modbus_err,
+                    )
+
+            # Fallback: boost via SuperWISE Socket.IO (set damper to 1)
+            if _superwise_client and cfg.damper_rooms:
+                damper_room = next(
+                    (r for r in cfg.damper_rooms if r.name == unit_name), None
+                )
+                if damper_room:
+                    resp = await _superwise_client.set_damper_value(damper_room, 1)
+                    success = resp.get("success", [])
+                    if success:
+                        return [
+                            types.TextContent(
+                                type="text",
+                                text=f"✅ Air boost triggered for {damper_room.label} (via SuperWISE).",
+                            )
+                        ]
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text=f"✅ Air boost triggered for {damper_room.label} (via SuperWISE).",
+                        )
+                    ]
+
             if reg is None:
                 return [
                     types.TextContent(
                         type="text", text=f"Unknown boost unit: {unit_name}"
                     )
                 ]
-
-            await client.trigger_air_boost(reg)
-
             return [
                 types.TextContent(
-                    type="text",
-                    text=(
-                        f"✅ Air boost triggered for {reg.label}. "
-                        f"SuperWISE will manage duration and revert automatically."
-                    ),
+                    type="text", text=f"❌ Boost failed for {reg.label}"
                 )
             ]
 
